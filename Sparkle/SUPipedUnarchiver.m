@@ -113,7 +113,15 @@
             [task setStandardOutput:[NSFileHandle fileHandleWithStandardOutput]];
             [task setLaunchPath:command];
             [task setArguments:[args arrayByAddingObject:destination]];
-            [task launch];
+            @try {
+                [task launch];
+            } @catch (NSException *exception) {
+                SULog(SULogLevelError, @"Failed to launch '%@': %@", command, exception);
+                [archiveOutput closeFile];
+                [archiveInput closeFile];
+                [notifier notifyFailureWithError:[NSError errorWithDomain:SUSparkleErrorDomain code:SUUnarchivingError userInfo:@{ NSLocalizedDescriptionKey:[NSString stringWithFormat:@"Extraction failed, command '%@' could not be launched", command]}]];
+                return;
+            }
             
             NSUInteger bytesRead = 0;
             do {

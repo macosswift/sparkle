@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
 
+if [ "$CONFIGURATION" = "Debug" ] ; then
+    exit 0
+fi
+
 if ! which -s git ; then
     exit 0
 fi

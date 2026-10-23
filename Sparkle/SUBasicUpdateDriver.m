@@ -604,12 +604,22 @@
     //Set relaunching flag.
     [self.host setBool:YES forUserDefaultsKey:SUUpdateRelaunchingMarkerKey];
     
-    [NSTask launchedTaskWithLaunchPath:relaunchToolPath arguments:@[[self.host bundlePath],
-                                                                    pathToRelaunch,
-                                                                    [NSString stringWithFormat:@"%d", [[NSProcessInfo processInfo] processIdentifier]],
-                                                                    self.tempDir,
-                                                                    relaunch ? @"1" : @"0",
-                                                                    showUI ? @"1" : @"0"]];
+    @try {
+        [NSTask launchedTaskWithLaunchPath:relaunchToolPath arguments:@[[self.host bundlePath],
+                                                                        pathToRelaunch,
+                                                                        [NSString stringWithFormat:@"%d", [[NSProcessInfo processInfo] processIdentifier]],
+                                                                        self.tempDir,
+                                                                        relaunch ? @"1" : @"0",
+                                                                        showUI ? @"1" : @"0"]];
+    } @catch (NSException *exception) {
+        SULog(SULogLevelError, @"Failed to launch the relauncher at %@: %@", relaunchToolPath, exception);
+        [self.host setBool:NO forUserDefaultsKey:SUUpdateRelaunchingMarkerKey];
+        [self abortUpdateWithError:[NSError errorWithDomain:SUSparkleErrorDomain code:SURelaunchError userInfo:@{
+            NSLocalizedDescriptionKey: SULocalizedString(@"An error occurred while installing the update. Please try again later.", nil),
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat:@"Couldn't launch the relauncher at %@: %@", relaunchToolPath, exception.reason ?: exception.name],
+        }]];
+        return;
+    }
     [self terminateApp];
 }
 
