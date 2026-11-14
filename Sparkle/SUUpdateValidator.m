@@ -7,6 +7,7 @@
 //
 
 #import "SUUpdateValidator.h"
+#import "SUStandardVersionComparator.h"
 #import "SUSignatureVerifier.h"
 #import "SUCodeSigningVerifier.h"
 #import "SUInstaller.h"
@@ -192,6 +193,25 @@
             return NO;
         }
         
+        if (![self updateIsNewerThanHost:host newHost:newHost error:error]) {
+            return NO;
+        }
+
+        if (hostIsCodeSigned) {
+            NSError *requirementError = nil;
+            if (![SUCodeSigningVerifier codeSignatureIsValidAtBundleURL:installSourceURL andMatchesSignatureAtBundleURL:host.bundle.bundleURL error:&requirementError]) {
+                if (error != NULL) {
+                    NSMutableDictionary *userInfo = [NSMutableDictionary dictionary];
+                    userInfo[NSLocalizedDescriptionKey] = @"The update archive is validly signed, but the new app doesn't satisfy the code signing requirement of the old app. The update will be rejected.";
+                    if (requirementError != nil) {
+                        userInfo[NSUnderlyingErrorKey] = requirementError;
+                    }
+                    *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUValidationError userInfo:userInfo];
+                }
+                return NO;
+            }
+        }
+
         NSError *codeSigningInnerError = nil;
         if (updateIsCodeSigned && ![SUCodeSigningVerifier codeSignatureIsValidAtBundleURL:installSourceURL error:&codeSigningInnerError]) {
             if (error != NULL) {
@@ -235,6 +255,19 @@
         
         return YES;
     }
+}
+
+- (BOOL)updateIsNewerThanHost:(SUHost *)host newHost:(SUHost *)newHost error:(NSError * __autoreleasing *)error SPU_OBJC_DIRECT
+{
+    NSString *hostVersion = host.version;
+    NSString *newVersion = newHost.version;
+    if (hostVersion.length == 0 || newVersion.length == 0 || [[[SUStandardVersionComparator alloc] init] compareVersion:hostVersion toVersion:newVersion] != NSOrderedAscending) {
+        if (error != NULL) {
+            *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUValidationError userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"The update's version %@ is not newer than the installed version %@. The update will be rejected.", newVersion, hostVersion] }];
+        }
+        return NO;
+    }
+    return YES;
 }
 
 - (void)getHostIsCodeSigned:(BOOL *)outHostIsCodeSigned updateIsCodeSigned:(BOOL *)outUpdateIsCodeSigned hostHasAnyDSAKey:(BOOL *)outHostHasAnyDSAKey updateHasAnyDSAKey:(BOOL *)outUpdateHasAnyDSAKey migratesDSAKeys:(BOOL *)outMigratesDSAKeys hostPublicKeys:(SUPublicKeys *)hostPublicKeys updatePublicKeys:(SUPublicKeys *)updatePublicKeys hostBundleURL:(NSURL *)hostBundleURL updateBundleURL:(NSURL *)updateBundleURL SPU_OBJC_DIRECT
@@ -332,6 +365,10 @@
         return NO;
     }
 
+    if (![self updateIsNewerThanHost:host newHost:newHost error:error]) {
+        return NO;
+    }
+
     // Security-critical part starts here
     BOOL passedDSACheck = NO;
     BOOL passedCodeSigning = NO;
@@ -370,9 +407,7 @@
         return NO;
     }
 
-    // Either DSA must be valid, or Apple Code Signing must be valid.
-    // We allow failure of one of them, because this allows key rotation without breaking chain of trust.
-    if (passedDSACheck || passedCodeSigning) {
+    if (passedDSACheck && (passedCodeSigning || !hostIsCodeSigned)) {
         return YES;
     }
 

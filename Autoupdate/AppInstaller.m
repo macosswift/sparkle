@@ -286,7 +286,7 @@ static const NSTimeInterval SUDisplayProgressTimeDelay = 0.7;
                 } else {
                     // Falling back on code signing for prevalidation requires SUVerifyUpdateBeforeExtraction
                     // and that update is a regular app update, and not a delta update
-                    BOOL fallbackOnCodeSigning = (verifyBeforeExtraction && !archiveTypeMustValidateBeforeExtraction && [_installationType isEqualToString:SPUInstallationTypeApplication]);
+                    BOOL fallbackOnCodeSigning = NO;
                     
                     success = [_updateValidator validateDownloadPathWithFallbackOnCodeSigning:fallbackOnCodeSigning error:&prevalidationError];
                 }

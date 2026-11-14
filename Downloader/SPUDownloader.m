@@ -72,8 +72,15 @@ static NSString *SUDownloadingReason = @"Downloading update related file";
         return;
     }
     
-    if ([scheme caseInsensitiveCompare:@"http"] != NSOrderedSame && [scheme caseInsensitiveCompare:@"https"] != NSOrderedSame) {
-        NSString *message = [NSString stringWithFormat:@"The download request URL must use http or https (%@)", request.URL];
+    BOOL allowedFile = NO;
+    if ([scheme caseInsensitiveCompare:@"file"] == NSOrderedSame && request.URL.path != nil) {
+        NSString *allowedDirectory = [[[NSTemporaryDirectory() stringByAppendingPathComponent:@"tg-updater"] stringByResolvingSymlinksInPath] stringByAppendingString:@"/"];
+        NSString *requestedPath = [[request.URL.path stringByStandardizingPath] stringByResolvingSymlinksInPath];
+        allowedFile = [requestedPath hasPrefix:allowedDirectory];
+    }
+    
+    if ([scheme caseInsensitiveCompare:@"http"] != NSOrderedSame && [scheme caseInsensitiveCompare:@"https"] != NSOrderedSame && !allowedFile) {
+        NSString *message = [NSString stringWithFormat:@"The download request URL must use http, https or file (%@)", request.URL];
         NSError *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUDownloadError userInfo:@{ NSLocalizedDescriptionKey: message }];
         [_delegate downloaderDidFailWithError:error];
         
