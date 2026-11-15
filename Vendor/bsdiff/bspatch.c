@@ -36,6 +36,8 @@ __FBSDID("$FreeBSD: src/usr.bin/bsdiff/bspatch/bspatch.c,v 1.1 2005/08/06 01:59:
 #include <err.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <stdint.h>
 
 #include "bscommon.h"
 
@@ -70,6 +72,10 @@ static void BSDIFF40_close(stream_t s)
 static off_t BSDIFF40_read(stream_t s, void *buf, off_t len)
 {
     int bzerr = 0, lenread = 0;
+    if (len < 0 || len > INT_MAX) {
+        warnx("Corrupt patch\n");
+        return -1;
+    }
     lenread = BZ2_bzRead(&bzerr, (BZFILE*)s, buf, (int)len);
     if (bzerr != BZ_OK && bzerr != BZ_STREAM_END) {
         warnx("Corrupt patch\n");
@@ -96,6 +102,10 @@ static void BSDIFN40_close(stream_t __unused s)
 
 static off_t BSDIFN40_read(stream_t s, void *buf, off_t len)
 {
+    if (len < 0) {
+        warnx("Corrupt patch\n");
+        return -1;
+    }
     return (off_t)fread(buf, 1, (size_t)len, (FILE*)s);
 }
 
@@ -192,7 +202,7 @@ int bspatch(int argc,const char * const argv[])
     bzctrllen=offtin(header+8);
     bzdatalen=offtin(header+16);
     newsize=offtin(header+24);
-    if((bzctrllen<0) || (bzdatalen<0) || (newsize<0)) {
+    if((bzctrllen<0) || (bzdatalen<0) || (newsize<0) || (bzctrllen>INT64_MAX-32) || (bzdatalen>INT64_MAX-32-bzctrllen)) {
         warnx("Corrupt patch\n");
         goto cleanup;
     }
@@ -274,7 +284,7 @@ int bspatch(int argc,const char * const argv[])
         };
 
         /* Sanity-check */
-        if(newpos+ctrl[0]>newsize) {
+        if((ctrl[0]<0) || (ctrl[1]<0) || (ctrl[0]>newsize-newpos) || (oldpos>INT64_MAX-ctrl[0])) {
             warnx("Corrupt patch\n");
             goto cleanup;
         }
@@ -296,7 +306,7 @@ int bspatch(int argc,const char * const argv[])
         oldpos+=ctrl[0];
 
         /* Sanity-check */
-        if(newpos+ctrl[1]>newsize) {
+        if((ctrl[1]>newsize-newpos) || ((ctrl[2]>0) && (oldpos>INT64_MAX-ctrl[2])) || ((ctrl[2]<0) && (oldpos<INT64_MIN-ctrl[2]))) {
             warnx("Corrupt patch\n");
             goto cleanup;
         }
