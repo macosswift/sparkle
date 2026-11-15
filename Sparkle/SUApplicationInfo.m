@@ -19,9 +19,16 @@
 
 + (NSImage *)bestIconForHost:(SUHost *)host
 {
-    NSURL *iconURL = [SUBundleIcon iconURLForHost:host];
-    
-    NSImage *icon = (iconURL == nil) ? nil : [[NSImage alloc] initWithContentsOfURL:iconURL];
+    NSImage *icon = nil;
+    if (@available(macOS 26.0, *)) {
+        if ([[host objectForInfoDictionaryKey:@"CFBundlePackageType"] isEqual:@"APPL"]) {
+            icon = [[NSWorkspace sharedWorkspace] iconForFile:host.bundlePath];
+        }
+    }
+    if (!icon) {
+        NSURL *iconURL = [SUBundleIcon iconURLForHost:host];
+        icon = (iconURL == nil) ? nil : [[NSImage alloc] initWithContentsOfURL:iconURL];
+    }
     // Use a default icon if none is defined.
     if (!icon) {
         // this asumption may not be correct (eg. even though we're not the main bundle, it could be still be a regular app)
